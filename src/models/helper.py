@@ -155,6 +155,17 @@ class BuildModel(keras.Model):
         self.num_captions_per_image = num_captions_per_image
         self.image_aug = image_aug
 
+    def call(self, inputs,batch_seq,training=False):
+        img_embed = self.cnn_model(inputs)
+        encoder_out = self.encoder(img_embed, training=training)
+        batch_seq_inp = batch_seq[:, :-1]
+        batch_seq_true = batch_seq[:, 1:]
+        mask = tf.math.not_equal(batch_seq_true, 0)
+        batch_seq_pred = self.decoder(
+            batch_seq_inp, encoder_out, training=training, mask=mask
+        )
+        return batch_seq_pred
+
     def calculate_loss(self, y_true, y_pred, mask):
         loss = self.loss(y_true, y_pred)
         mask = tf.cast(mask, dtype=loss.dtype)
