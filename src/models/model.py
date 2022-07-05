@@ -17,6 +17,10 @@ from tensorflow.keras import layers
 from tensorflow.keras.applications import efficientnet
 from tensorflow.keras.layers import TextVectorization
 from nltk.translate.bleu_score import corpus_bleu
+import mlflow
+
+mlflow.set_tracking_uri("https://dagshub.com/archana/MLOps.mlflow")
+tracking_uri = mlflow.get_tracking_uri()
 
 class ImageCaptioningModel:
     def __init__(self,img_size=(299,299),vocab_size=10000,seq_len=25,
@@ -152,7 +156,11 @@ class ImageCaptioningModel:
         self.index_lookup = dict(zip(range(len(self.vocab)), self.vocab))
         bleu_score = self.calculate_bleu()
         print(bleu_score)
+        return bleu_score
     
 if __name__ == "__main__":
     img = ImageCaptioningModel()
-    img.model()
+    with mlflow.start_run():
+        img.model()
+        bleu_score = img.get_testing_accuracy()
+        mlflow.log_metric("bleu_score", bleu_score)
