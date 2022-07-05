@@ -25,10 +25,13 @@ class TestModel:
         #self.IMAGES_PATH = path
         self.data_path = "/home/archana/projects/MLOps/src/data/raw/"
         self.images_path = self.data_path+"Images"
+        self.caption_map, self.caption_list = self.image_cap.get_tokens_data()
 
+    # def get_tokens_data(self):
+    #     return self.dataset.buildCaptionsMap(self.tokens_path)
 
     def predict(self,img_path):
-        checkpoint_path = "/home/archana/projects/MLOps/src/models/model_num.h5"
+        checkpoint_path = "training_1/cp.ckpt"
         checkpoint_dir = os.path.dirname(checkpoint_path)
 
         # # Create a callback that saves the model's weights
@@ -65,14 +68,15 @@ class TestModel:
             print("Model does not exist")
 
     def generate_caption(self,img):
-        max_decoded_sentence_length = self.SEQ_LENGTH -1
+        max_decoded_sentence_length = self.SEQ_LENGTH -2
         sample_img = self.data_preprocess.decode_and_resize(img)
         encoded_img = tf.expand_dims(sample_img, 0)
         decoded_caption = "<start> "
         for i in range(max_decoded_sentence_length):
             tokenized_caption = self.vectorizer([decoded_caption])[:, :-1]
             mask = tf.math.not_equal(tokenized_caption, 0)
-            predictions = self.caption_model([tokenized_caption,encoded_img])
+            predictions = self.caption_model([encoded_img,tokenized_caption])
+            print(predictions)
             sampled_token_index = np.argmax(predictions[0, i, :])
             sampled_token = self.index_lookup[sampled_token_index]
             if sampled_token == " <end>":

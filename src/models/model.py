@@ -47,9 +47,6 @@ class ImageCaptioningModel:
                 layers.RandomRotation(0.25),
             ]
         )
-        print("Image path")
-        print(list(self.train_data.keys())[0])
-        print()
         self.test_data = self.dataset.getTestData(self.test_images_path,self.caption_map)
 
     def get_tokens_data(self):
@@ -150,10 +147,10 @@ class ImageCaptioningModel:
             validation_data=self.validation_dataset,
             callbacks=[cp_callback]
         )
-        train_loss=history.history['loss'][-1]
-        train_acc=history.history['sparse_categorical_accuracy'][-1]
-        val_loss=history.history['val_loss'][-1]
-        val_acc=history.history['val_sparse_categorical_accuracy'][-1]
+        # train_loss=history.history['loss'][-1]
+        # train_acc=history.history['sparse_categorical_accuracy'][-1]
+        # val_loss=history.history['val_loss'][-1]
+        # val_acc=history.history['val_sparse_categorical_accuracy'][-1]
 
         #self.save_model()
         
@@ -171,7 +168,7 @@ class ImageCaptioningModel:
         print(self.train_dataset)
         self.train()
         #tf.keras.models.save_model(self.caption_model, 'model.h5')
-        self.get_testing_accuracy()
+        #self.get_testing_accuracy()
 
     def get_testing_accuracy(self):
         self.vocab = self.vectorizer.get_vocabulary()
@@ -182,7 +179,6 @@ class ImageCaptioningModel:
     
 if __name__ == "__main__":
     img = ImageCaptioningModel()
-    with mlflow.start_run():
-        img.model()
-        bleu_score = img.get_testing_accuracy()
-        mlflow.log_metric("bleu_score", bleu_score)
+    img.model()
+    #bleu_score = img.get_testing_accuracy()
+    #mlflow.log_metric("bleu_score", bleu_score)

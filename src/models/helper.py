@@ -155,8 +155,9 @@ class BuildModel(keras.Model):
         self.num_captions_per_image = num_captions_per_image
         self.image_aug = image_aug
 
-    def call(self, inputs,batch_seq,training=False):
-        img_embed = self.cnn_model(inputs)
+    def call(self, inputs,training=False):
+        img,batch_seq = inputs
+        img_embed = self.cnn_model(img)
         encoder_out = self.encoder(img_embed, training=training)
         batch_seq_inp = batch_seq[:, :-1]
         batch_seq_true = batch_seq[:, 1:]
