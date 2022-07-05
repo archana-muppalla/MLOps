@@ -1,4 +1,5 @@
 import sys
+from urllib.parse import urlparse
 
 sys.path.append('/home/archana/projects/MLOps/src/')
 from data.make_dataset import Dataset
@@ -10,25 +11,23 @@ from helper import TransformerEncoder, PositionalEmbedding, TransformerDecoder, 
 import os
 import re
 import numpy as np
-
 import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
-from tensorflow.keras.applications import efficientnet
 from tensorflow.keras.layers import TextVectorization
 from nltk.translate.bleu_score import corpus_bleu
+import mlflow
+from keras.models import model_from_json
+from keras.models import load_model
+
+mlflow.set_tracking_uri(f'https://dagshub.com/archana/MLOps.mlflow')
 
 class ImageCaptioningModel:
-    def __init__(self,img_size=(299,299),vocab_size=10000,seq_len=25,
+    def __init__(self,img_size=(299,299),vocab_size=10000,seq_len=20,
                 embed_dim=512,ff_dim=512,batch_size=64,epochs=30,) -> None:
         self.IMAGE_SIZE = img_size
-
         self.VOCAB_SIZE = vocab_size
-
         self.SEQ_LENGTH = seq_len
-
         self.EMBED_DIM = embed_dim
-
+        self.model_file = "tmp/model"
         self.FF_DIM = ff_dim
         self.BATCH_SIZE = batch_size
         self.EPOCHS = epochs
@@ -101,7 +100,7 @@ class ImageCaptioningModel:
 
             decoded_caption = "<start> "
             for i in range(max_decoded_sentence_length):
-                tokenized_caption = self.vectorization([decoded_caption])[:, :-1]
+                tokenized_caption = self.vectorizer([decoded_caption])[:, :-1]
                 mask = tf.math.not_equal(tokenized_caption, 0)
                 predictions = self.caption_model.decoder(
                     tokenized_caption, encoded_img, training=False, mask=mask
@@ -119,7 +118,47 @@ class ImageCaptioningModel:
         bleu_score = corpus_bleu(actual_captions, predicted_captions)
 
         return bleu_score
+    
+    def save_model(self):
+        self.caption_model.save_weights("model_num.h5")
 
+    def train(self):
+        checkpoint_path = "training_1/cp.ckpt"
+        checkpoint_dir = os.path.dirname(checkpoint_path)
+
+        # Create a callback that saves the model's weights
+        cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path,
+                                                        save_weights_only=True,
+                                                        verbose=1)
+
+        model_dir = os.listdir(self.model_file)
+        self.cnn_model = self.get_cnn_model()
+        encoder = TransformerEncoder(embed_dim=self.EMBED_DIM, dense_dim=self.FF_DIM, num_heads=1)
+        decoder = TransformerDecoder(embed_dim=self.EMBED_DIM, ff_dim=self.FF_DIM, num_heads=2,seq_len=self.SEQ_LENGTH,
+                                        vocab_size = self.VOCAB_SIZE)
+        self.caption_model = BuildModel(
+                cnn_model=self.cnn_model, encoder=encoder, decoder=decoder, image_aug=self.image_augmentation
+            )
+        cross_entropy = keras.losses.SparseCategoricalCrossentropy(
+                from_logits=False, reduction="none"
+            )
+        self.caption_model.compile(optimizer=keras.optimizers.Adam(), loss=cross_entropy)
+        history = self.caption_model.fit(
+            self.train_dataset,
+            epochs=1,
+            validation_data=self.validation_dataset,
+            callbacks=[cp_callback]
+        )
+        train_loss=history.history['loss'][-1]
+        train_acc=history.history['sparse_categorical_accuracy'][-1]
+        val_loss=history.history['val_loss'][-1]
+        val_acc=history.history['val_sparse_categorical_accuracy'][-1]
+
+        #self.save_model()
+        
+        #self.caption_model.save(self.model)
+
+        #tf.keras.models.save_model(self.caption_model, self.model_file)
 
     def model(self):
         self.vectorizer = self.data_preprocess.get_text_features(self.caption_list)
@@ -129,26 +168,12 @@ class ImageCaptioningModel:
         self.validation_dataset = self.data_preprocess.make_dataset(list(self.validation_data.keys()), 
         list(self.validation_data.values()))
         print(self.train_dataset)
-        cnn_model = self.get_cnn_model()
-        encoder = TransformerEncoder(embed_dim=self.EMBED_DIM, dense_dim=self.FF_DIM, num_heads=1)
-        decoder = TransformerDecoder(embed_dim=self.EMBED_DIM, ff_dim=self.FF_DIM, num_heads=2,seq_len=self.SEQ_LENGTH,
-                                     vocab_size = self.VOCAB_SIZE)
-        self.caption_model = BuildModel(
-            cnn_model=cnn_model, encoder=encoder, decoder=decoder, image_aug=self.image_augmentation,
-        )
-        cross_entropy = keras.losses.SparseCategoricalCrossentropy(
-            from_logits=False, reduction="none"
-        )
+        self.train()
+        #tf.keras.models.save_model(self.caption_model, 'model.h5')
+        self.get_testing_accuracy()
 
-        self.caption_model.compile(optimizer=keras.optimizers.Adam(), loss=cross_entropy)
-
-        self.caption_model.fit(
-            self.train_dataset,
-            epochs=1,
-            validation_data=self.validation_dataset,
-        )
     def get_testing_accuracy(self):
-        self.vocab = self.vectorization.get_vocabulary()
+        self.vocab = self.vectorizer.get_vocabulary()
         self.index_lookup = dict(zip(range(len(self.vocab)), self.vocab))
         bleu_score = self.calculate_bleu()
         print(bleu_score)
